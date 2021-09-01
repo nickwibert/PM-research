@@ -1,6 +1,6 @@
 # Visualization of Aerosol Optical Depth Data
 # Author: Nick Wibert
-# Last Modified: 08/22/21
+# Last Modified: 08/31/21
 
 
 # Libraries ---------------------------------------------------------------
@@ -141,14 +141,14 @@ plot(r,13:18, breaks=c(seq(from=0,to=max,by=floor(max/10))),
 
 
 
-# PM_viz function ---------------------------------------------------------
+# Visualization functions -------------------------------------------------
 
-# The function below is the same code as the previous section,
+# The function below is pretty much the same the previous section,
 # but it allows you to run the function from the command-line
 # and choose which component you want to visualize instead of
 # manually stepping through the code.
 
-PM_viz <- function()
+PMvizInteractive <- function()
 {
   while (TRUE)
   {
@@ -162,59 +162,53 @@ PM_viz <- function()
       # store vector of composition codes to be used when opening files later
       comp <- c("PM25", "SO4", "NIT", "NH4", "OM", "BC", "SOIL", "SS")
       
+      # store vector of years
+      years <- c(2000:2017)
+      
       cat <- menu(c("PM25 (total particulate matter)", "SO4  (sulfate)",
                     "NIT  (nitrate)", "NH4  (ammonium)",
                     "OM   (organic matter)", "BC   (black carbon)",
                     "SOIL (mineral dust)", "SS   (sea-salt)"),
                   title = "Which data do you want to visualize?")
       
-      start <- menu(c("All years", "2000", "2001", "2002", "2003",
-                      "2004", "2005", "2006", "2007", "2008", "2009",
-                      "2010", "2011", "2012", "2013", "2014", "2015",
-                      "2016", "2017"),
+      start <- menu(c(years, "All years"),
                     title = "Starting with which year?")
       
-      if (start == 1)
+      if (start == 19) # all years
       {
-        start <- 2000
-        end <- 2017
+        start <- 1
+        end <- 18
       }
       else
       {
         while(TRUE)
         {
-          end <- menu(c("2000", "2001", "2002", "2003",
-                        "2004", "2005", "2006", "2007", "2008", "2009",
-                        "2010", "2011", "2012", "2013", "2014", "2015",
-                        "2016", "2017"),
+          end <- menu(years,
                       title = paste("Ending with which year?",
                       "(choose same year if you only want to plot one)"))
-          if (start > end+1)
+          if (start > end)
           {
             message("ERROR: end year cannot be earlier than start year.")
             message("Please select a different end year.")
-            message(paste("Your selected start year is:", 1998+start))
+            message(paste("Your selected start year is:", years[start]))
           }
           else {break}
         }
-        # convert selections to actual years
-        start <- 1998 + start
-        end <- 1999 + end
       }
+      
+      message("Gathering data, please wait...")
       
       # PM25 data has a unique filename, so we handle it alone here
       if (cat == 1)
       {
-        message("Plotting data, please wait...")
-        
-        year <- start
+        year <- years[start]
         filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
                           '12-RH35.nc', sep="")
         r <- stack(raster(filename, varname = "PM25"))
         
         if (start != end) # if start and end are the same, skip this
         {
-          for (year in (start+1):end)
+          for (year in years[start+1]:years[end])
           {
             filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
                               '12-RH35.nc', sep="")
@@ -222,54 +216,9 @@ PM_viz <- function()
             r <- stack(r, raster(filename, varname = "PM25"))
           }
         }
-        
-        names(r) <- paste("PM25 in", c(start:end))
-        
-        plot_count <- end - start + 1
-        
-        # set min and max for all raster layers
-        # NOTE: this part can take a while, but is necessary to have 
-        # comparable color intervals across plots.
-        r <- setMinMax(r)
-        
-        # maxValue returns a vector with the max for each individual
-        # layer (year in our context). Taking the max of that vector will give us
-        # the max across all years in the raster, so that we can set a reasonable
-        # scale of values across all plots for easy comparison from 0 to max.
-        max <- max(maxValue(r))
-        
-        if (plot_count < 6)
-        {
-          plot(r,1:plot_count, breaks=c(seq(0,50,5)),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-        }
-        else if (plot_count < 12)
-        {
-          plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-          plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-        }
-        else
-        {
-          plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-          plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-          plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-        }
       }
       else # the rest of the data has similar filenames
       {
-        message("Plotting data, please wait...")
-        
         # comp[cat] will pull the code for the selected composition
         # so that the correct file is read (ex. comp[2] = "SO4")
         
@@ -280,7 +229,7 @@ PM_viz <- function()
         
         if (start != end) # if start and end are the same, skip this
         {
-          for (year in (start+1):end)
+          for (year in years[start+1]:years[end])
           {
             filename <- paste("data/", comp[cat], "/GWRwSPEC_", comp[cat], 'p_NA_',
                               year, '01_', year, '12-wrtSPECtotal.nc', sep="")
@@ -288,51 +237,164 @@ PM_viz <- function()
             r <- stack(r, raster(filename, varname = comp[cat]))
           }
         }
-        
-        names(r) <- paste(comp[cat], "in", c(start:end))
-        
-        plot_count <- end - start + 1
-        
-        # set min and max for all raster layers
-        # NOTE: this part can take a while, but is necessary to have 
-        # comparable color intervals across plots.
-        r <- setMinMax(r)
-        
-        # maxValue returns a vector with the max for each individual
-        # layer (year in our context). Taking the max of that vector will give us
-        # the max across all years in the raster, so that we can set a reasonable
-        # scale of values across all plots for easy comparison from 0 to max.
-        max <- max(maxValue(r))
-        
-        if (plot_count <= 6)
-        {
-          plot(r,1:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-        }
-        else if (plot_count <= 12)
-        {
-          plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-          plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-        }
-        else
-        {
-          plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-          plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-          plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
-               col=rev(brewer.pal(11,"RdYlBu")), 
-               xlab="Longitude", ylab="Latitude")
-        }
+      }
+    
+      names(r) <- paste("PM25 in", c(years[start]:years[end]))
+      
+      plot_count <- length(c(years[start]:years[end]))
+      
+      # set min and max for all raster layers
+      # NOTE: this part can take a while, but is necessary to have 
+      # comparable color intervals across plots.
+      r <- setMinMax(r)
+      
+      # maxValue returns a vector with the max for each individual
+      # layer (year in our context). Taking the max of that vector will give us
+      # the max across all years in the raster, so that we can set a reasonable
+      # scale of values across all plots for easy comparison from 0 to max.
+      max <- max(maxValue(r))
+      
+      message("Plotting data...")
+      
+      if (plot_count < 6)
+      {
+        plot(r,1:plot_count, breaks=c(seq(0,50,5)),
+             col=rev(brewer.pal(11,"RdYlBu")), 
+             xlab="Longitude", ylab="Latitude")
+      }
+      else if (plot_count < 12)
+      {
+        plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+             col=rev(brewer.pal(11,"RdYlBu")), 
+             xlab="Longitude", ylab="Latitude")
+        plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+             col=rev(brewer.pal(11,"RdYlBu")), 
+             xlab="Longitude", ylab="Latitude")
+      }
+      else
+      {
+        plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+             col=rev(brewer.pal(11,"RdYlBu")), 
+             xlab="Longitude", ylab="Latitude")
+        plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+             col=rev(brewer.pal(11,"RdYlBu")), 
+             xlab="Longitude", ylab="Latitude")
+        plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+             col=rev(brewer.pal(11,"RdYlBu")), 
+             xlab="Longitude", ylab="Latitude")
       }
       message("Done!")
     }
   }
+}
+
+
+# This function is the same as the previous function,
+# but takes in the pollutant type and years as arguments.
+# Much faster as long as you know the pollutant codes.
+PMviz <- function(type, years)
+{
+  # store vector of composition codes
+  comp <- c("PM25", "SO4", "NIT", "NH4", "OM", "BC", "SOIL", "SS")
+  
+  # store vector of years
+  if (missing(years))
+  { years <- c(2000:2017) }
+  
+  # argument error-checking
+  if (!(type %in% comp))
+  {
+    message("ERROR: Invalid pollutant type. Use one of the following codes:")
+    print(c("PM25 (total particulate matter)","SO4  (sulfate)",
+            "NIT  (nitrate)", "NH4  (ammonium)",
+            "OM   (organic matter)", "BC   (black carbon)",
+            "SOIL (mineral dust)", "SS   (sea-salt)"))
+    invokeRestart("abort")
+  }
+  
+  message("Gathering data, please wait...")
+    
+  # PM25 data has a unique filename, so we handle it alone here
+  if (type == "PM25")
+  {
+    year <- years[1]
+    filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+                      '12-RH35.nc', sep="")
+    r <- stack(raster(filename, varname = "PM25"))
+    
+    if (length(years) > 1) # if start and end are the same, skip this
+    {
+      for (year in years[2:length(years)])
+      {
+        filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+                          '12-RH35.nc', sep="")
+        
+        r <- stack(r, raster(filename, varname = "PM25"))
+      }
+    }
+  }
+  else # the rest of the data has similar filenames
+  {
+    year <- years[1]
+    filename <- paste("data/", type, "/GWRwSPEC_", type, 'p_NA_',
+                      year, '01_', year, '12-wrtSPECtotal.nc', sep="")
+    r <- stack(raster(filename, varname = type))
+    
+    if (length(years) > 1) # if start and end are the same, skip this
+    {
+      for (year in years[2:length(years)])
+      {
+        filename <- paste("data/", type, "/GWRwSPEC_", type, 'p_NA_',
+                          year, '01_', year, '12-wrtSPECtotal.nc', sep="")
+        
+        r <- stack(r, raster(filename, varname = type))
+      }
+    }
+  }
+
+  names(r) <- paste("PM25 in", years)
+  
+  plot_count <- length(years)
+  
+  # set min and max for all raster layers
+  # NOTE: this part can take a while, but is necessary to have 
+  # comparable color intervals across plots.
+  r <- setMinMax(r)
+  
+  # maxValue returns a vector with the max for each individual
+  # layer (year in our context). Taking the max of that vector will give us
+  # the max across all years in the raster, so that we can set a reasonable
+  # scale of values across all plots for easy comparison from 0 to max.
+  max <- max(maxValue(r))
+  
+  message("Plotting data...")
+  
+  if (plot_count < 6)
+  {
+    plot(r,1:plot_count, breaks=c(seq(0,50,5)),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+  }
+  else if (plot_count < 12)
+  {
+    plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+    plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+  }
+  else
+  {
+    plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+    plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+    plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+  }
+  message("Done!")
 }

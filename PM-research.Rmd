@@ -1,0 +1,146 @@
+---
+title: "Investigating Surface PM2.5 Pollution in the US"
+author: "Nick Wibert"
+date: "9/1/2021"
+output: pdf_document
+urlcolor: blue
+---
+
+Refer to the file `PM_viz.R` for raw R code.
+
+The main function from this code, `PMviz()`, visualizes particulate matter data collected by the
+[\underline{Atmosphere Composition Analysis Group}](http://fizz.phys.dal.ca/~atmos/martin/?page_id=140). Click the link to view a detailed breakdown of the data and how it was collected.
+
+Annual datasets are provided for PM$_{2.5}$ from 2000 to 2018. There are also annual datasets for compositional estimates of SO$_4^{2+}$ (sulfate), NO$_3^-$ (nitrate), NH$_4^+$ (ammonium), organic matter, black carbon, mineral dust, and sea salt. These compositional estimates have annual datasets from 2000 to 2017.
+
+The PMviz function can be used to visualize this data for the continent of North America in a simple spatial plot. The main argument is `type`, which is the desired pollutant (must be passed in as the exact code specified on the website, i.e. "PM25" for particulate matter). The `years` argument should be a vector of all the years you want plotted. This could be a single year, a range of years, or several distinct years with no particular pattern.
+
+Once the pollutant and dates have been specified, the relevant data is gathered, and the range of mass concentrations is calculated based on the maximum concentration in that specific set of data. This was done so that charts which are printed together may be easily compared. Currently, the function only visualizes one pollutant type at a time, though I want to add functionality to plot multiple in the same function call so the plots can be compared.
+
+To view the code for this PMviz function, refer to the R file mentioned above.
+
+```{r PMviz, warning=FALSE, message=FALSE, echo=FALSE}
+library(raster)
+library(RColorBrewer)
+
+PMviz <- function(type, years)
+{
+  # store vector of composition codes
+  comp <- c("PM25", "SO4", "NIT", "NH4", "OM", "BC", "SOIL", "SS")
+  
+  # store vector of years
+  if (missing(years))
+  { years <- c(2000:2017) }
+  
+  # argument error-checking
+  if (!(type %in% comp))
+  {
+    message("ERROR: Invalid pollutant type. Use one of the following codes:")
+    print(c("PM25 (total particulate matter)","SO4  (sulfate)",
+            "NIT  (nitrate)", "NH4  (ammonium)",
+            "OM   (organic matter)", "BC   (black carbon)",
+            "SOIL (mineral dust)", "SS   (sea-salt)"))
+    invokeRestart("abort")
+  }
+  
+  message("Gathering data, please wait...")
+    
+  # PM25 data has a unique filename, so we handle it alone here
+  if (type == "PM25")
+  {
+    year <- years[1]
+    filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+                      '12-RH35.nc', sep="")
+    r <- stack(raster(filename, varname = "PM25"))
+    
+    if (length(years) > 1) # if start and end are the same, skip this
+    {
+      for (year in years[2:length(years)])
+      {
+        filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+                          '12-RH35.nc', sep="")
+        
+        r <- stack(r, raster(filename, varname = "PM25"))
+      }
+    }
+  }
+  else # the rest of the data has similar filenames
+  {
+    year <- years[1]
+    filename <- paste("data/", type, "/GWRwSPEC_", type, 'p_NA_',
+                      year, '01_', year, '12-wrtSPECtotal.nc', sep="")
+    r <- stack(raster(filename, varname = type))
+    
+    if (length(years) > 1) # if start and end are the same, skip this
+    {
+      for (year in years[2:length(years)])
+      {
+        filename <- paste("data/", type, "/GWRwSPEC_", type, 'p_NA_',
+                          year, '01_', year, '12-wrtSPECtotal.nc', sep="")
+        
+        r <- stack(r, raster(filename, varname = type))
+      }
+    }
+  }
+
+  names(r) <- paste(type, "in", years)
+  
+  plot_count <- length(years)
+  
+  # set min and max for all raster layers
+  # NOTE: this part can take a while, but is necessary to have 
+  # comparable color intervals across plots.
+  r <- setMinMax(r)
+  
+  # maxValue returns a vector with the max for each individual
+  # layer (year in our context). Taking the max of that vector will give us
+  # the max across all years in the raster, so that we can set a reasonable
+  # scale of values across all plots for easy comparison from 0 to max.
+  max <- max(maxValue(r))
+  
+  message("Plotting data...")
+  
+  if (plot_count < 6)
+  {
+    plot(r,1:plot_count, breaks=c(seq(0,50,5)),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+  }
+  else if (plot_count < 12)
+  {
+    plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+    plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+  }
+  else
+  {
+    plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+    plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+    plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+         col=rev(brewer.pal(11,"RdYlBu")), 
+         xlab="Longitude", ylab="Latitude")
+  }
+  message("Done!")
+}
+```
+
+Let's look at years 2000 and 2017 for every "type."
+
+```{r, fig.height = 2, message = FALSE}
+PMviz("PM25", c(2000,2017))
+PMviz("SO4", c(2000,2017))
+PMviz("NIT", c(2000,2017))
+PMviz("NH4", c(2000,2017))
+PMviz("OM", c(2000,2017))
+PMviz("BC", c(2000,2017))
+PMviz("SOIL", c(2000,2017))
+PMviz("SS", c(2000,2017))
+```
+
