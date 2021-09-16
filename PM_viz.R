@@ -14,6 +14,7 @@ library(raster)
 
 ## NOTE: Make sure your current working directory is the 'PM-research'
 ## repository before continuing.
+setwd("C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/")
 
 # set path and filename
 ncpath <- paste(getwd(), "/data/PM25/", sep="")
@@ -57,6 +58,9 @@ Conventions <- ncatt_get(ncin,0,"Conventions")
 
 # close netCDF file
 nc_close(ncin)
+
+
+
 
 
 
@@ -352,7 +356,7 @@ PMviz <- function(type, years)
     }
   }
 
-  names(r) <- paste("PM25 in", years)
+  names(r) <- paste(type, "in", years)
   
   plot_count <- length(years)
   
@@ -397,4 +401,5 @@ PMviz <- function(type, years)
          xlab="Longitude", ylab="Latitude")
   }
   message("Done!")
+  message(paste("Max is", max(maxValue(r))))
 }
