@@ -1,49 +1,108 @@
 # K-Means Clustering of Aerosol Optical Depth Data
 # Author: Nick Wibert
-# Last Modified: 09/25/21
+# Last Modified: 10/12/21
 
 
 # Libraries ---------------------------------------------------------------
 
+library(stats)
+library(ncdf4)
 library(raster)
-
+library(sf)
+library(rgdal)
+library(ggplot2)
+library(tigris)
+library(tidyverse)
+library(rgeos)
+library(spatialEco)
+library(ptinpoly)
 
 # K-means clustering ------------------------------------------------------
 
 data_dir <- "C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/Annual"
 
-setwd(data_dir)
-
+years <- 2013:2016
 names <- c("BC", "NH4", "NIT", "OM", "SO4", "SOIL", "SS")
-files <- c()
 
-# get annual data for all components in the year 2000
-for (name in names)
-{
-  files <- append(files,
-                  file.path(name, 
-                            list.files(path = file.path(data_dir, name),
-                                       pattern="200012.nc")))
-}
-
-r <- stack(files)
-
-# crop raster layers to bounded box of USA
-e <- as(extent(-124.848974, -66.885444, 24.396308, 49.384358), 'SpatialPolygons')
+usa <- readOGR("C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/cb_2018_us_nation_5m.shp")
+# crop to lower 48 states
+e <- as(extent(-125, -66, 24, 50), 'SpatialPolygons')
 crs(e) <- "+proj=longlat +datum=WGS84 +no_defs"
-usa <- crop(r, e)
+usa <- crop(usa,e)
 
-# take a random sample of only 1% of the data
-usa.sample <- as.data.frame(sampleRandom(usa, size=(dim(usa)[1]*dim(usa)[2]*0.01),
-                                         xy=TRUE, na.rm=TRUE))
-
-# perform k-means clustering, store cluster id in data frame
-usa.sample <- data.frame(usa.sample, k = kmeans(usa.sample, 7)$cluster)
-
-# plot data points where color is determined by cluster
-plot(usa.sample$x, usa.sample$y, col = usa.sample$k.2,
-     xlab = "Latitude", ylab = "Longitude",
-     main = "K-Means Clustering for 2000 (using all components)",
-     cex.main=0.8, cex.lab = 0.7, cex.axis = 0.6)
+#1. coerce to points, then to data frame
+# names are Lines.NR Lines.ID Line.NR coords.x1 coords.x2
+## start here for polys
+lin <- as(usa, "SpatialLinesDataFrame")  
+## start here for lines
+pts <- as.data.frame(as(lin, "SpatialPointsDataFrame"))
 
 
+#3. convert to data frame
+# names are        long      lat order  hole piece  id group
+dpts <- ggplot2::fortify(usa)
+
+x.usa <- dpts$long  
+y.usa <- dpts$lat
+
+for (year in years)
+{
+  files <- c()
+  # get annual data for all components in the current year
+  for (name in names)
+  {
+    files <- append(files,
+                    file.path(data_dir,name, 
+                              list.files(path = file.path(data_dir, name),
+                                         pattern=paste(year, "12.nc", sep=""))))
+  }
+  
+  r <- stack(files)
+  
+  # crop raster layers to bounded box of USA
+  e <- as(extent(-124.848974, -66.885444, 24.396308, 49.384358), 'SpatialPolygons')
+  crs(e) <- "+proj=longlat +datum=WGS84 +no_defs"
+  r <- crop(r, e)
+  
+  # take a random sample of only 1% of the data
+  r.sample <- as.data.frame(sampleRandom(r, size=(dim(r)[1]*dim(r)[2]*0.01),
+                                           xy=TRUE, na.rm=TRUE))
+  
+  x <- r.sample[,1]
+  y <- r.sample[,2]
+  
+  xy <- data.frame(x,y)
+  coordinates(xy) = ~x + y
+  proj4string(xy) = proj4string(usa)
+  
+  ov <- over(xy, as(usa,"SpatialPolygons"))
+  
+  r.sample <- data.frame(r.sample, inUSA = ov)
+  
+  r.final <- r.sample[complete.cases(r.sample),]
+  
+  # perform k-means clustering, store cluster id in data frame
+  usa.kmeans <- kmeans(r.final[,-c(1,2,10)], 5)
+  
+  # plot data points where color is determined by cluster
+  plot(r.final$x, r.final$y, col = usa.kmeans$cluster,
+       xlab = "Latitude", ylab = "Longitude",
+       main = paste("K-Means Clustering for ", year, sep=""),
+       pch=1, cex.main=0.8, cex.lab = 0.7, cex.axis = 0.6, cex=0.8)
+  
+  lines(usa)
+  legend(-126, 35, legend=sort(unique(usa.kmeans$cluster)),
+         col = sort(unique(usa.kmeans$cluster)), pch = 19, cex = 0.7)
+  
+  # Heatmap
+  centers <- usa.kmeans$centers
+  centers <- cbind(centers, rowSums(centers))
+  colnames(centers)[8] <- "Total"
+  
+  heatmap(t(centers), main = paste("Cluster Centers for ", year, sep=""),
+          xlab = "Cluster", ylab = "Component", col = brewer.pal(9, "OrRd"))
+  legend(x = "bottomright", legend=round(seq(min(centers),max(centers), length.out=9),1),
+         col=brewer.pal(9, "OrRd"), pch = 15, pt.cex=4)
+  
+  rm(list=c("files", "r.sample", "r.final", "centers", "r", "ov", "usa.kmeans", "xy"))
+}
