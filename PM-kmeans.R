@@ -1,6 +1,6 @@
 # K-Means Clustering of Aerosol Optical Depth Data
 # Author: Nick Wibert
-# Last Modified: 10/12/21
+# Last Modified: 10/26/21
 
 
 # Libraries ---------------------------------------------------------------
@@ -16,6 +16,7 @@ library(tidyverse)
 library(rgeos)
 library(spatialEco)
 library(ptinpoly)
+library(RColorBrewer)
 
 # K-means clustering ------------------------------------------------------
 
@@ -99,10 +100,54 @@ for (year in years)
   centers <- cbind(centers, rowSums(centers))
   colnames(centers)[8] <- "Total"
   
-  heatmap(t(centers), main = paste("Cluster Centers for ", year, sep=""),
-          xlab = "Cluster", ylab = "Component", col = brewer.pal(9, "OrRd"))
-  legend(x = "bottomright", legend=round(seq(min(centers),max(centers), length.out=9),1),
-         col=brewer.pal(9, "OrRd"), pch = 15, pt.cex=4)
+  centers.df <- as.data.frame(as.table(centers))
+  names(centers.df) <- c("Cluster", "Name", "Value")
+  
+  print(
+    ggplot(centers.df, aes(x = Cluster, y = Name, fill = Value)) + 
+    geom_tile() + ggtitle(paste("Cluster Centers for ", year, sep="")) +
+    scale_y_discrete(limits=rev(levels(centers.df$Name))) +
+    theme(axis.title.x=element_text(),
+          axis.title.y=element_blank(),
+          plot.title = element_text(hjust = 0.5, face="bold")) +
+    scale_fill_distiller(palette = 5, direction = 1) +
+    labs(fill = expression(paste(mu, "g/", m^3)))
+  )
   
   rm(list=c("files", "r.sample", "r.final", "centers", "r", "ov", "usa.kmeans", "xy"))
+}
+
+
+## create heatmaps using .dat files saved
+## from jobs run on HiPerGator
+data_dir <- "C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/Rdata/"
+
+files <- list.files(data_dir, ".dat")
+
+for (file in files)
+{
+  load(file.path(data_dir, file))
+  
+  year <- substr(file, 10, 13)
+  
+  centers.df <- as.data.frame(as.table(centers))
+  names(centers.df) <- c("Cluster", "Name", "Value")
+  
+  print(
+    ggplot(centers.df, aes(x = Cluster, y = Name, fill = Value)) + 
+      geom_tile() + ggtitle(paste("Cluster Centers for ", year, sep="")) +
+      scale_y_discrete(limits=rev(levels(centers.df$Name))) +
+      theme(axis.title.x=element_text(),
+            axis.title.y=element_blank(),
+            plot.title = element_text(hjust = 0.5, face="bold")) +
+      scale_fill_distiller(palette = 5, direction = 1) +
+      labs(fill = expression(paste(mu, "g/", m^3)))
+  )
+  
+  # Note: add limits as an argument to scale_fill_distiller
+  # if you want to print all heatmaps on the same fixed scale for comparison.
+  # You should also remove the "Total" category when you do this,
+  # as it skews the scale.
+  
+  rm(centers)
 }
