@@ -1,6 +1,6 @@
 # Visualization of Aerosol Optical Depth Data
 # Author: Nick Wibert
-# Last Modified: 08/31/21
+# Last Modified: 10/26/21
 
 
 # Libraries ---------------------------------------------------------------
@@ -8,6 +8,8 @@
 library(ncdf4)
 library(RColorBrewer)
 library(raster)
+library(sp)
+library(rgdal)
 
 
 # Accessing data from netCDF files ----------------------------------------
@@ -17,8 +19,8 @@ library(raster)
 setwd("C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/")
 
 # set path and filename
-ncpath <- paste(getwd(), "/data/PM25/", sep="")
-ncname <- "V4NA03_PM25_NA_201801_201812-RH35"  
+ncpath <- paste(getwd(), "/data/Annual/PM25/", sep="")
+ncname <- "GWRwSPEC_PM25_NA_200101_200112-RH35"  
 ncfname <- paste(ncpath, ncname, ".nc", sep="")
 dname <- "PM25" 
 
@@ -69,26 +71,33 @@ nc_close(ncin)
 # Let's visualize all the data for PM25 in North America for 2000-2018
 # Run the loop and plot code below to plot all 19 years separately.
 
-year <- 2000
-filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
-                  '12-RH35.nc', sep="")
-r <- stack(raster(filename, varname = "PM25"))
+data_dir <- "C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/Annual"
 
-for (year in 2001:2018)
+years <- 2000:2016
+filename <- paste("GWRwSPEC_PM25_NA_", year, '01_', year,
+                  '12-RH35.nc', sep="")
+r <- stack()
+
+for (year in years)
 {
-  filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+  filename <- paste("GWRwSPEC_PM25_NA_", year, '01_', year,
                     '12-RH35.nc', sep="")
   
-  r <- stack(r, raster(filename, varname = "PM25"))
+  r <- stack(r, raster(file.path(data_dir, "PM25", filename), varname = "PM25"))
 }
 
-names(r) <- c(2000:2018)
+names(r) <- years
 
-plot(r,1:6, breaks=c(seq(0,50,5)), col=rev(brewer.pal(11,"RdYlBu")), 
+# crop raster layers to bounded box of USA
+e <- as(extent(-125, -66, 24, 50), 'SpatialPolygons')
+crs(e) <- "+proj=longlat +datum=WGS84 +no_defs"
+r <- crop(r, e)
+
+plot(r,1:6, breaks=c(seq(0,50,5)), col=rev(brewer.pal(11,"RdYlBu")),
      xlab="Longitude", ylab="Latitude")
-plot(r,7:12, breaks=c(seq(0,50,5)), col=rev(brewer.pal(11,"RdYlBu")), 
+plot(r,7:12, breaks=c(seq(0,50,5)), col=rev(brewer.pal(11,"RdYlBu")),
      xlab="Longitude", ylab="Latitude")
-plot(r,13:18, breaks=c(seq(0,50,5)), col=rev(brewer.pal(11,"RdYlBu")), 
+plot(r,13:18, breaks=c(seq(0,50,5)), col=rev(brewer.pal(11,"RdYlBu")),
      xlab="Longitude", ylab="Latitude")
 
 
@@ -152,6 +161,8 @@ plot(r,13:18, breaks=c(seq(from=0,to=max,by=floor(max/10))),
 # and choose which component you want to visualize instead of
 # manually stepping through the code.
 
+data_dir <- "C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/Annual"
+
 PMvizInteractive <- function()
 {
   while (TRUE)
@@ -167,7 +178,7 @@ PMvizInteractive <- function()
       comp <- c("PM25", "SO4", "NIT", "NH4", "OM", "BC", "SOIL", "SS")
       
       # store vector of years
-      years <- c(2000:2017)
+      years <- c(2000:2016)
       
       cat <- menu(c("PM25 (total particulate matter)", "SO4  (sulfate)",
                     "NIT  (nitrate)", "NH4  (ammonium)",
@@ -178,10 +189,10 @@ PMvizInteractive <- function()
       start <- menu(c(years, "All years"),
                     title = "Starting with which year?")
       
-      if (start == 19) # all years
+      if (start == 18) # all years
       {
         start <- 1
-        end <- 18
+        end <- 17
       }
       else
       {
@@ -206,18 +217,20 @@ PMvizInteractive <- function()
       if (cat == 1)
       {
         year <- years[start]
-        filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+        filename <- paste("GWRwSPEC_PM25_NA_", year, '01_', year,
                           '12-RH35.nc', sep="")
-        r <- stack(raster(filename, varname = "PM25"))
+        r <- stack(raster(file.path(data_dir, comp[cat], filename),
+                          varname = comp[cat]))
         
         if (start != end) # if start and end are the same, skip this
         {
           for (year in years[start+1]:years[end])
           {
-            filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+            filename <- paste("GWRwSPEC_PM25_NA_", year, '01_', year,
                               '12-RH35.nc', sep="")
             
-            r <- stack(r, raster(filename, varname = "PM25"))
+            r <- stack(r, raster(file.path(data_dir, comp[cat], filename),
+                              varname = comp[cat]))
           }
         }
       }
@@ -226,24 +239,30 @@ PMvizInteractive <- function()
         # comp[cat] will pull the code for the selected composition
         # so that the correct file is read (ex. comp[2] = "SO4")
         
-        year <- start
-        filename <- paste("data/", comp[cat], "/GWRwSPEC_", comp[cat], 'p_NA_',
-                          year, '01_', year, '12-wrtSPECtotal.nc', sep="")
-        r <- stack(raster(filename, varname = comp[cat]))
+        year <- years[start]
+        filename <- paste("GWRwSPEC_", comp[cat], '_NA_',
+                          year, '01_', year, '12.nc', sep="")
+        r <- stack(raster(file.path(data_dir, comp[cat], filename),
+                          varname = comp[cat]))
         
         if (start != end) # if start and end are the same, skip this
         {
           for (year in years[start+1]:years[end])
           {
-            filename <- paste("data/", comp[cat], "/GWRwSPEC_", comp[cat], 'p_NA_',
-                              year, '01_', year, '12-wrtSPECtotal.nc', sep="")
-            
-            r <- stack(r, raster(filename, varname = comp[cat]))
+            filename <- paste("GWRwSPEC_", comp[cat], '_NA_',
+                              year, '01_', year, '12.nc', sep="")
+            r <- stack(r, raster(file.path(data_dir, comp[cat], filename),
+                              varname = comp[cat]))
           }
         }
       }
     
-      names(r) <- paste("PM25 in", c(years[start]:years[end]))
+      names(r) <- paste(comp[cat], " in ", c(years[start]:years[end]))
+      
+      # crop raster layers to bounded box of USA
+      e <- as(extent(-125, -66, 24, 50), 'SpatialPolygons')
+      crs(e) <- "+proj=longlat +datum=WGS84 +no_defs"
+      r <- crop(r, e)
       
       plot_count <- length(c(years[start]:years[end]))
       
@@ -262,28 +281,28 @@ PMvizInteractive <- function()
       
       if (plot_count < 6)
       {
-        plot(r,1:plot_count, breaks=c(seq(0,50,5)),
+        plot(r,1:plot_count, breaks=c(seq(from=0,to=max,by=max/10)),
              col=rev(brewer.pal(11,"RdYlBu")), 
              xlab="Longitude", ylab="Latitude")
       }
       else if (plot_count < 12)
       {
-        plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+        plot(r,1:6, breaks=c(seq(from=0,to=max,by=max/10)),
              col=rev(brewer.pal(11,"RdYlBu")), 
              xlab="Longitude", ylab="Latitude")
-        plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+        plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=max/10)),
              col=rev(brewer.pal(11,"RdYlBu")), 
              xlab="Longitude", ylab="Latitude")
       }
       else
       {
-        plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+        plot(r,1:6, breaks=c(seq(from=0,to=max,by=max/10)),
              col=rev(brewer.pal(11,"RdYlBu")), 
              xlab="Longitude", ylab="Latitude")
-        plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+        plot(r,7:12, breaks=c(seq(from=0,to=max,by=max/10)),
              col=rev(brewer.pal(11,"RdYlBu")), 
              xlab="Longitude", ylab="Latitude")
-        plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+        plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=max/10)),
              col=rev(brewer.pal(11,"RdYlBu")), 
              xlab="Longitude", ylab="Latitude")
       }
@@ -298,12 +317,14 @@ PMvizInteractive <- function()
 # Much faster as long as you know the pollutant codes.
 PMviz <- function(type, years)
 {
+  data_dir <- "C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/Annual"
+  
   # store vector of composition codes
   comp <- c("PM25", "SO4", "NIT", "NH4", "OM", "BC", "SOIL", "SS")
   
   # store vector of years
   if (missing(years))
-  { years <- c(2000:2017) }
+  { years <- c(2000:2016) }
   
   # argument error-checking
   if (!(type %in% comp))
@@ -316,47 +337,56 @@ PMviz <- function(type, years)
     invokeRestart("abort")
   }
   
+  if (!identical((years %in% 2000:2016), rep(TRUE, length(years))))
+  {
+    message("ERROR: Invalid date range. Make sure you are only using years from 2000 to 2016.")
+    invokeRestart("abort")
+  }
+  
   message("Gathering data, please wait...")
     
   # PM25 data has a unique filename, so we handle it alone here
   if (type == "PM25")
   {
     year <- years[1]
-    filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+    filename <- paste("GWRwSPEC_", type, "_NA_", year, '01_', year,
                       '12-RH35.nc', sep="")
-    r <- stack(raster(filename, varname = "PM25"))
+    r <- stack(raster(file.path(data_dir, type, filename), varname = type))
     
     if (length(years) > 1) # if start and end are the same, skip this
     {
       for (year in years[2:length(years)])
       {
-        filename <- paste("data/PM25/V4NA03_PM25_NA_", year, '01_', year,
+        filename <- paste("GWRwSPEC_", type, "_NA_", year, '01_', year,
                           '12-RH35.nc', sep="")
-        
-        r <- stack(r, raster(filename, varname = "PM25"))
+        r <- stack(r, raster(file.path(data_dir, type, filename), varname = type))
       }
     }
   }
   else # the rest of the data has similar filenames
   {
     year <- years[1]
-    filename <- paste("data/", type, "/GWRwSPEC_", type, 'p_NA_',
-                      year, '01_', year, '12-wrtSPECtotal.nc', sep="")
-    r <- stack(raster(filename, varname = type))
+    filename <- paste("GWRwSPEC_", type, '_NA_',
+                      year, '01_', year, '12.nc', sep="")
+    r <- stack(raster(file.path(data_dir, type, filename), varname = type))
     
     if (length(years) > 1) # if start and end are the same, skip this
     {
       for (year in years[2:length(years)])
       {
-        filename <- paste("data/", type, "/GWRwSPEC_", type, 'p_NA_',
-                          year, '01_', year, '12-wrtSPECtotal.nc', sep="")
-        
-        r <- stack(r, raster(filename, varname = type))
+        filename <- paste("GWRwSPEC_", type, '_NA_',
+                          year, '01_', year, '12.nc', sep="")
+        r <- stack(r, raster(file.path(data_dir, type, filename), varname = type))
       }
     }
   }
 
   names(r) <- paste(type, "in", years)
+  
+  # crop raster layers to bounded box of USA
+  e <- as(extent(-125, -66, 24, 50), 'SpatialPolygons')
+  crs(e) <- "+proj=longlat +datum=WGS84 +no_defs"
+  r <- crop(r, e)
   
   plot_count <- length(years)
   
@@ -375,31 +405,30 @@ PMviz <- function(type, years)
   
   if (plot_count < 6)
   {
-    plot(r,1:plot_count, breaks=c(seq(0,50,5)),
+    plot(r,1:plot_count, breaks=c(seq(from=0,to=max,by=max/10)),
          col=rev(brewer.pal(11,"RdYlBu")), 
          xlab="Longitude", ylab="Latitude")
   }
   else if (plot_count < 12)
   {
-    plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+    plot(r,1:6, breaks=c(seq(from=0,to=max,by=max/10)),
          col=rev(brewer.pal(11,"RdYlBu")), 
          xlab="Longitude", ylab="Latitude")
-    plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+    plot(r,7:plot_count, breaks=c(seq(from=0,to=max,by=max/10)),
          col=rev(brewer.pal(11,"RdYlBu")), 
          xlab="Longitude", ylab="Latitude")
   }
   else
   {
-    plot(r,1:6, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+    plot(r,1:6, breaks=c(seq(from=0,to=max,by=max/10)),
          col=rev(brewer.pal(11,"RdYlBu")), 
          xlab="Longitude", ylab="Latitude")
-    plot(r,7:12, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+    plot(r,7:12, breaks=c(seq(from=0,to=max,by=max/10)),
          col=rev(brewer.pal(11,"RdYlBu")), 
          xlab="Longitude", ylab="Latitude")
-    plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=floor(max/10))),
+    plot(r,13:plot_count, breaks=c(seq(from=0,to=max,by=max/10)),
          col=rev(brewer.pal(11,"RdYlBu")), 
          xlab="Longitude", ylab="Latitude")
   }
   message("Done!")
-  message(paste("Max is", max(maxValue(r))))
 }
