@@ -432,3 +432,85 @@ PMviz <- function(type, years)
   }
   message("Done!")
 }
+
+
+# This function takes in two specific years,
+# and the visualizes the *difference* in concentrations
+# across those two years for a given pollutant type.
+PMvizDiff <- function(type, startYear, endYear)
+{
+  data_dir <- "C:/Users/nickw/OneDrive/Desktop/UF/Undergrad Research/PM-research/data/Annual"
+  
+  # store vector of composition codes
+  comp <- c("PM25", "SO4", "NIT", "NH4", "OM", "BC", "SOIL", "SS")
+  
+  # argument error-checking
+  if (!(type %in% comp))
+  {
+    message("ERROR: Invalid pollutant type. Use one of the following codes:")
+    print(c("PM25 (total particulate matter)","SO4  (sulfate)",
+            "NIT  (nitrate)", "NH4  (ammonium)",
+            "OM   (organic matter)", "BC   (black carbon)",
+            "SOIL (mineral dust)", "SS   (sea-salt)"))
+    invokeRestart("abort")
+  }
+  
+  if (missing(startYear) || missing(endYear))
+  {
+    message("ERROR: Please provide both a start year and end year.")
+    invokeRestart("abort")
+  }
+  
+  if (!(startYear %in% 2000:2016) || !(endYear %in% 2000:2016))
+  {
+    message("ERROR: Make sure you are only using years from 2000 to 2016.")
+    invokeRestart("abort")
+  }
+  
+  message("Gathering data, please wait...")
+  
+  # PM25 data has a unique filename, so we handle it alone here
+  if (type == "PM25")
+  {
+    # filename + raster for startYear
+    filename1 <- paste("GWRwSPEC_", type, "_NA_", startYear, '01_', startYear,
+                      '12-RH35.nc', sep="")
+    r1 <- raster(file.path(data_dir, type, filename1), varname = type)
+    
+    # filename + raster for endYear
+    filename2 <- paste("GWRwSPEC_", type, "_NA_", endYear, '01_', endYear,
+                       '12-RH35.nc', sep="")
+    r2 <- raster(file.path(data_dir, type, filename2), varname = type)
+  }
+  else # the rest of the data has similar filenames
+  {
+    # filename + raster for startYear
+    filename1 <- paste("GWRwSPEC_", type, '_NA_',
+                      startYear, '01_', startYear, '12.nc', sep="")
+    r1 <- raster(file.path(data_dir, type, filename1), varname = type)
+    
+    # filename + raster for endYear
+    filename2 <- paste("GWRwSPEC_", type, '_NA_',
+                       endYear, '01_', endYear, '12.nc', sep="")
+    r2 <- raster(file.path(data_dir, type, filename2), varname = type)
+  }
+  
+  # difference raster (subtracts all startYear values from endYear values)
+  r <- r2 - r1
+  
+  
+  # crop raster layers to bounded box of USA
+  e <- as(extent(-125, -66, 24, 50), 'SpatialPolygons')
+  crs(e) <- "+proj=longlat +datum=WGS84 +no_defs"
+  r <- crop(r, e)
+  
+  min <- min(minValue(r))
+  max <- max(maxValue(r))
+  
+  message("Plotting data...")
+
+  plot(r, main = paste("Difference in", type, "from", startYear, "to", endYear),
+       xlab="Longitude", ylab="Latitude")
+
+  message("Done!")
+}
